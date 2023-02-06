@@ -1,0 +1,24 @@
+{
+    "error": true,
+    "type": "response",
+    "code": 403,
+    "headers": {
+        "perf": "7626143928",
+        "content-type": "application/problem+json",
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "93",
+        "x-transaction-id": "9be543b4200039e6",
+        "x-response-time": "106",
+        "x-connection-hash": "c80f57e58c7289afbf189cfcdf03286efd6a7cae2f656d508542ff4ee81ae069",
+        "date": "Sun, 05 Feb 2023 18:01:03 GMT",
+        "server": "tsa_m",
+        "connection": "close"
+    },
+    "rateLimit": undefined,
+    "data": {
+        "title": "Forbidden",
+        "type": "about:blank",
+        "status": 403,
+        "detail": "Forbidden"
+    }
+}

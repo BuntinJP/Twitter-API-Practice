@@ -1,4 +1,4 @@
-const { postForDiscord } = require('./postForDiscord.js');
+const { postForDiscord } = require('../postForDiscord.js');
 
 postForDiscord(
     'test',
