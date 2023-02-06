@@ -1,4 +1,7 @@
 config.json
+config2.json
 node_modules/
-bookmarks.db
 bookmarks.json
+*.db
+JSON/
+.DS_Store

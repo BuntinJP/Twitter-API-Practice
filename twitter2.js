@@ -190,12 +190,7 @@ const unBookmarkWithTimeBounce = async (ids, start, load = null) => {
         }
     }
     if (end < ids.length) {
-        load.text =
-            'レート制限により一時停止中(15分) : (' +
-            end +
-            '/ ' +
-            ids.length +
-            ')';
+        load.text = 'レート制限回避のため、一時停止中(15分)...';
         sleep(900000).then(() => {
             refreshBearerToken().then(() => {
                 unBookmarkWithTimeBounce(ids, end, load);
