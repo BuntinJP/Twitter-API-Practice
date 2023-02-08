@@ -13,3 +13,6 @@ redirect_url = input("Enter Redirect URL: ")
 # 適切なパラメータ付きのリダイレクト先の URL を渡したとき一時的なトークンがもらえる
 token = oauth2_user_handler.fetch_token(redirect_url)
 print(token)
+with open('config2.json', 'w') as f:
+    dct = {'token': token['access_token'], 'refresh': token['refresh_token']}
+    json.dump(token, f, indent=4)
