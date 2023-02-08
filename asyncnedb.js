@@ -1,15 +1,17 @@
 //-----------------EXP-----------------
 const fs = require('fs');
 const Nedb = require('nedb');
-const userDB = new Nedb({ filename: 'db/users.db', autoload: true });
-const mediaDB = new Nedb({ filename: 'db/media.db', autoload: true });
-const bookmarkDB = new Nedb({ filename: 'db/bookmarks.db', autoload: true });
-const bookmarkDB2 = new Nedb({ filename: 'db/bookmarks2.db', autoload: true });
-const deleteDB = new Nedb({ filename: 'db/delete.db', autoload: true });
-const OutBookmarksDB = new Nedb({
-    filename: 'db/OutBookmarks.db',
-    autoload: true,
-});
+const Datastore = require('nedb-promises');
+const userDB = Datastore.create('db/users.db');
+userDB.load();
+const mediaDB = Datastore.create('db/media.db');
+mediaDB.load();
+const bookmarkDB = Datastore.create('db/bookmarks.db');
+bookmarkDB.load();
+const bookmarkDB2 = Datastore.create('db/bookmarks2.db');
+bookmarkDB2.load();
+const OutBookmarksDB = Datastore.create('db/OutBookmarks.db');
+OutBookmarksDB.load();
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const { setTimeout } = require('timers/promises');
 const loading = require('loading-cli');
@@ -53,21 +55,14 @@ const lookupBookmarks = async () => {
                 'variants',
             ],
         });
-        saveAsJson(bookmarks, 'bookmarks');
-        const loadFetch = loading('ブックマーク取得').start();
         await bookmarks.fetchLast(1000);
-        loadFetch.succeed('1: ' + bookmarks._realData.data.length + '件取得');
         const users = bookmarks._realData.includes.users;
         load.text = 'ユーザー取得中...';
-        userDB.insert(users, function (err, newDoc) {
-            // Needy debug
-        });
+        await userDB.insert(users);
         await setTimeout(1000);
         load.text = 'メディア取得中...';
         const media = bookmarks._realData.includes.media;
-        mediaDB.insert(media, function (err, newDoc) {
-            // Needy debug
-        });
+        await mediaDB.insert(media);
         await setTimeout(1000);
         load.text = 'ブックマーク取得中...';
         const c = bookmarks._realData.data.length;
@@ -80,9 +75,7 @@ const lookupBookmarks = async () => {
                 author_id: bookmark.author_id,
                 attachments: bookmark.attachments,
             };
-            bookmarkDB.insert(insBM, function (err, newDoc) {
-                // Needy debug
-            });
+            await bookmarkDB.insert(insBM);
             idarray.push(bookmark.id);
         }
         load.succeed('1: ブックマーク取得完了');
@@ -102,28 +95,22 @@ const saveAsJson = (data, filename) => {
 
 const updateBookmarks = async (ids) => {
     const load = loading('取得中...').start();
-    await getTweetsWithTimeBounce(ids, 0, bookmarkDB2, load).then(() => {
-        return;
-    });
+    await getTweetsWithTimeBounce(ids, 0, bookmarkDB2, load);
+    return;
 };
 
-const detaSave = (prevDB, finalDB) => {
-    let loadingDetaSave = loading('最終データベースに登録中...').start();
-    prevDB.loadDatabase();
-    prevDB.find({}, function (err, docs) {
-        if (err !== null) {
-            console.error(err);
-        }
-        finalDB.insert(docs, (err, newDoc) => {
-            if (err !== null) {
-                loadingDetaSave.fail('最終データベースに登録失敗');
-                console.error(err);
-            }
-            loadingDetaSave.succeed(
-                '3: 最終データベースに登録完了(' + newDoc.length + '件)'
-            );
-        });
-    });
+const filterNedbsId = (doc) => {
+    return {
+        id: doc.id,
+        text: doc.text,
+        author_id: doc.author_id,
+        attachments: doc.attachments,
+    };
+};
+const detaSave = async (prevDB, finalDB) => {
+    const prevDoc = await prevDB.find({});
+    await finalDB.insert(prevDoc.map(filterNedbsId));
+    return;
 };
 
 /* const unBookmark = async (db) => {
@@ -137,7 +124,7 @@ const detaSave = (prevDB, finalDB) => {
         unBookmarkWithTimeBounce(ids, 0, load);
     });
 }; */
-const unBookmark = async (db, db2) => {
+/* const unBookmark = async (db, db2) => {
     const loadUnBookmark = loading('ブックマーク削除開始').start();
     db.loadDatabase();
     await db.find({}, async (err, docs) => {
@@ -172,7 +159,7 @@ const unBookmark = async (db, db2) => {
                 }
             }
         }
-        loadUnBookmark.succeed('4: ブックマーク削除完了');
+        loadUnBookmark.succeed('3: ブックマーク削除完了');
     });
     let loadDeleteDB = loading('DB削除中...').start();
     let a = 0;
@@ -190,58 +177,45 @@ const unBookmark = async (db, db2) => {
             );
         });
     });
-};
+}; */
 
 const unBookmark2 = async (db, db2) => {
     const loadUnBookmark = loading('ブックマーク削除開始').start();
-    db.loadDatabase();
-    await db.find({}, async (err, docs) => {
-        const ids = docs.map((docs) => docs.id);
-        let count = 0;
-        let cnt = 1;
-        for (const id of ids) {
-            loadUnBookmark.text =
-                'ブックマーク削除中... (' + cnt + '/' + ids.length + ')';
-            if (count >= 50) {
-                await sleepLoading(15, loadUnBookmark);
-                refreshBearerToken();
-                count = 0;
-            }
-            while (true) {
-                try {
-                    let result = await client.v2.deleteBookmark(id);
-                    if (result.data.bookmarked === false) {
-                    } else {
-                        let l = loading('削除失敗(' + id + ')').warn();
-                    }
-                    cnt++;
-                    count++;
-                    break;
-                } catch (e) {
-                    count = 0;
-                    await sleepLoading(15, loadUnBookmark);
-                    await refreshBearerToken();
+    const data = await db.find({});
+    const ids = data.map((data) => data.id);
+    let count = 0;
+    let cnt = 1;
+    for (const id of ids) {
+        loadUnBookmark.text =
+            'ブックマーク削除中... (' + cnt + '/' + ids.length + ')';
+        if (count >= 50) {
+            await sleepLoading(15, loadUnBookmark);
+            refreshBearerToken();
+            count = 0;
+        }
+        while (true) {
+            try {
+                let result = await client.v2.deleteBookmark(id);
+                if (result.data.bookmarked === false) {
+                } else {
+                    let l = loading('削除失敗(' + id + ')').warn();
                 }
+                cnt++;
+                count++;
+                break;
+            } catch (e) {
+                count = 0;
+                await sleepLoading(15, loadUnBookmark);
+                await refreshBearerToken();
             }
         }
-        let loadDeleteDB = loading('DB削除中...').start();
-        db.remove({}, { multi: true }, function (err, num1) {
-            if (err !== null) {
-                console.error(err);
-            }
-            db2.remove({}, { multi: true }, function (err, num2) {
-                if (err !== null) {
-                    console.error(err);
-                }
-                loadDeleteDB.succeed(
-                    '4: DB削除完了(' + num1 + '件,' + num2 + '件)'
-                );
-                db.loadDatabase();
-                db2.loadDatabase();
-            });
-        });
-        loadUnBookmark.succeed('4: ブックマーク削除完了');
-    });
+    }
+    await db.removeMany({});
+    await db2.removeMany({});
+    db.load();
+    db2.load();
+    loadUnBookmark.succeed('3: ブックマーク削除完了');
+    return;
 };
 
 const refreshBearerToken = async () => {
@@ -268,17 +242,27 @@ const refreshBearerToken = async () => {
 };
 
 const main = async () => {
-    let loadingMain = loading('メインプロセス1').succeed();
-    await lookupBookmarks().then((result) => {
-        updateBookmarks(result).then(() => {
-            detaSave(bookmarkDB2, OutBookmarksDB);
-            unBookmark2(bookmarkDB, bookmarkDB2);
-        });
-    });
+    const result = await lookupBookmarks();
+    await updateBookmarks(result);
+    await detaSave(bookmarkDB2, OutBookmarksDB);
+    await unBookmark2(bookmarkDB, bookmarkDB2);
+    return;
+};
+
+const system = async () => {
+    let i = 1;
+    while (true) {
+        console.log(i);
+        try {
+            await main();
+        } catch (e) {
+            console.error(e);
+        }
+    }
 };
 
 //-----------------Main-------------------
-main();
+system();
 //-----------------CommonLevelFunctions-----------------
 /* const unBookmarkWithTimeBounce = async (ids, start, load = null) => {
     let unit = 45;
@@ -376,27 +360,20 @@ const getTweets = async (ids) => {
 };
 
 const getTweetsWithTimeBounce = async (ids, start, db, load = null) => {
-    //ids:Array of tweet id[String](MAX is infinty)
-    //using recursion to avoid rate limit
-    //betgin, start = 0;
     let end = start + 100;
     if (end > ids.length) {
         end = ids.length;
     }
-    await getTweets(ids.slice(start, end)).then((tweets) => {
-        let data = tweets.data;
-        db.insert(data, (err, newDoc) => {
-            //
-        });
-    });
+    const tweets = await getTweets(ids.slice(start, end));
+    await bookmarkDB2.insert(tweets.data);
     if (end < ids.length) {
         load.text = '取得中...' + end + '/' + ids.length;
-        await sleep(1000).then(() => {
-            getTweetsWithTimeBounce(ids, end, db, load);
-        });
+        await sleepLoading(10, load);
+        await getTweetsWithTimeBounce(ids, end, db, load);
     } else {
-        load.succeed('3: 取得完了' + '(取得長:' + ids.length + ')');
+        load.succeed('2: 取得完了' + '(取得長:' + ids.length + ')');
     }
+    return;
 };
 
 /* const sleep = async (ms) => {
