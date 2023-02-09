@@ -83,6 +83,55 @@ const lookupBookmarks = async () => {
     })();
     return idarray;
 };
+
+const lookupBookmarks2 = async () => {
+    let idarray = [];
+    const load = loading('1: ブックマーク取得開始').start();
+    try {
+        let bookmarks = await client.v2.bookmarks({
+            expansions: [
+                'referenced_tweets.id',
+                'author_id',
+                'attachments.media_keys',
+            ],
+            'media.fields': [
+                'media_key',
+                'preview_image_url',
+                'type',
+                'url',
+                'public_metrics',
+                'non_public_metrics',
+                'organic_metrics',
+                'promoted_metrics',
+                'alt_text',
+                'variants',
+            ],
+            max_results: 100,
+        });
+        let state = 1;
+        do {
+            const { users, media } = bookmarks._realData.includes;
+            if (users) await userDB.insert(users);
+            if (media) await mediaDB.insert(media);
+            load.text = 'ブックマーク取得(bookmarks.db)';
+            let datas = bookmarks._realData.data;
+            datas.forEach((data) => {
+                idarray.push(data.id);
+            });
+            await bookmarkDB.insert(datas);
+            if (!bookmarks.done) {
+                await bookmarks.fetchNext();
+            } else {
+                state = 0;
+            }
+        } while (state);
+    } catch (e) {
+        load.fail('1: ブックマーク取得失敗');
+        throw e;
+    }
+    load.succeed('1: ブックマーク取得完了' + idarray.length + '件');
+    return idarray;
+};
 //lookupBookmarks();
 //TODO: lookupBookmarksを、saveAsJsonのように、内部のNedb関連のインスタンスをグローバル変数としてではなく、引数として受け取るようにする
 const saveAsJson = (data, filename) => {
@@ -242,7 +291,7 @@ const refreshBearerToken = async () => {
 };
 
 const main = async () => {
-    const result = await lookupBookmarks();
+    const result = await lookupBookmarks2();
     await updateBookmarks(result);
     await detaSave(bookmarkDB2, OutBookmarksDB);
     await unBookmark2(bookmarkDB, bookmarkDB2);
@@ -258,6 +307,7 @@ const system = async () => {
         } catch (e) {
             console.error(e);
         }
+        i++;
     }
 };
 
