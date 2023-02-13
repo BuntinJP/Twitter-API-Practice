@@ -6,14 +6,10 @@ const userDB = Datastore.create('db/users.db');
 const mediaDB = Datastore.create('db/media.db');
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const config2 = JSON.parse(fs.readFileSync('./config2.json', 'utf8'));
-const { setTimeout } = require('timers/promises');
 const loading = require('loading-cli');
-
-//-----------------Twitter-----------------
 const { TwitterApi } = require('twitter-api-v2');
 let { access_token: accessToken, refresh_token: refreshToken } = config2;
 let client = new TwitterApi(accessToken);
-
 //-----------------Classes-----------------
 
 //https://twitter.com/intent/user?user_id=980345742593212416
@@ -28,22 +24,21 @@ const refreshBearerToken = async () => {
         accessToken,
         refreshToken: newRefreshToken,
     } = await subClient.refreshOAuth2Token(refreshToken);
-    bearerToken = accessToken;
     refreshToken = newRefreshToken;
-    client = new TwitterApi(bearerToken);
+    client = new TwitterApi(accessToken);
     fs.writeFileSync(
         './config2.json',
         JSON.stringify({
-            access_token: bearerToken,
+            access_token: accessToken,
             refresh_token: refreshToken,
         }),
         'utf8'
     );
 };
 
-const lookupLikes = async () => {
+const lookupLikes = async (user_id: string) => {
     //const user_id = '980345742593212416';
-    const user_id = '2478403218';
+    //const user_id = '2478403218';
     const options = {
         expansions: ['attachments.media_keys', 'author_id'],
         'media.fields': ['media_key', 'type', 'url', 'preview_image_url'],
@@ -104,41 +99,36 @@ const lookupLikes = async () => {
     return result;
 };
 
-const lookupTest = async () => {
-    const user_id = '980345742593212416';
-    const options = {
-        expansions: ['attachments.media_keys', '', 'author_id'],
-        'media.fields': ['media_key', 'type', 'url', 'preview_image_url'],
-    };
-    let count = 1;
-    let load = loading('いいねを取得中 pagenation:' + count).start();
-    try {
-        let result = await client.v2.userLikedTweets(user_id, options);
-    } catch (err) {
-        saveAsJson(err, 'error');
-    }
-    return result;
-};
-
-const sleepLoading = async (times, load, timeType) => {
+const sleepLoading = async (
+    times: number,
+    load: { text: string; succeed: (arg0: string) => any },
+    timeType: string
+) => {
     let time = times;
     if (timeType === 'm') {
         for (let i = 0; i < time; i++) {
-            await setTimeout(60000);
+            await sleep(60000);
             load.text = '再開まで' + (time - i) + '分';
         }
     } else if (timeType === 'h') {
         time = times * 60000 * 60;
         load.text = '' + times + '時間待機';
-        await setTimeout(time);
+        await sleep(time);
     } else {
-        time = times * 1000;
+        for (let i = times; i > 0; i--) {
+            await sleep(1000);
+            load.text = '再開まで' + i + '秒';
+        }
     }
-    load.succeed('再開');
+    load = load.succeed('待機終了(待機時間:' + times + timeType + ')');
     return;
 };
 
-const saveAsJson = (data, filename) => {
+const sleep = async (ms: number) => {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+const saveAsJson = (data: object, filename: string) => {
     fs.writeFileSync(
         `./JSON/${filename}.json`,
         JSON.stringify(data, null, 4),
@@ -146,5 +136,9 @@ const saveAsJson = (data, filename) => {
     );
 };
 //------------------Main------------------
-
-lookupLikes();
+(async () => {
+    console.log('start');
+    let load = loading('テスト').start();
+    await sleepLoading(5, load, 's');
+    load = load.succeed('テスト終了');
+})();
