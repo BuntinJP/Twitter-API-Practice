@@ -1,3 +1,38 @@
+# (無料)Twitter API v2 を用いたブックマークの取得
+
+## はじめに
+
+Twitter API v2 を用いて、自分のブックマークの棚卸しシステムを作りました。
+データは、NeDB を使って保存しています。
+OAuth2 については今回必要なんですが、本旨とは関係ないので割愛します。
+
+パッケージとして、[twitte-api-v2](https://www.npmjs.com/package/twitter-api-v2)を利用します。
+
+今回はベアラートークンを利用していて、ユーザーごとの読み取りには制限がかからないので、無料枠の API でも利用できます。
+
+## パッケージ
+
+nedb-promises は、NeDB の Promise 対応版のスーパーセットです。
+![パッケージ構造](https://cdn.discordapp.com/attachments/1068315061099175966/1074909289103228958/npmlist.png)
+
+## レートリミットについて
+
+Twitter API では、各 API エンドポイントに対してレートリミット(15 分間あたりのリクエスト数)が設定されています。
+今回はコレを考慮しながら実装していきます。今回使うエンドポイントに関して、レートリミットは以下のようになっています。
+
+| エンドポイント                          | レートリミット |
+| :-------------------------------------- | :------------- |
+| GET /2/users/:id/bookmarks              | 800            |
+| GET /2/tweets/:id                       | 900            |
+| DELETE /2/users/:id/bookmarks/:tweet_id | **50**         |
+
+このうち、ブックマークを解除する API はレートリミットが低いです。
+取得できるブックマークは最新 800 個です。
+そのため、800 を超えるブックマークを解除する場合かなり時間がかかります。
+
+## ソースコード
+
+```getBookmarks.js
 //-----------------EXP-----------------
 const fs = require('fs');
 const Datastore = require('nedb-promises');
@@ -108,7 +143,6 @@ const unBookmark2 = async (db) => {
     let count = 0;
     let cnt = 1;
     for (const id of ids) {
-        //load.started
         load.text = 'ブックマーク削除中... (' + cnt + '/' + ids.length + ')';
         if (count >= 50) {
             load = load.succeed(
@@ -144,9 +178,6 @@ const unBookmark2 = async (db) => {
                 );
                 await sleepLoadingMain(15, load.start());
                 await refreshBearerToken();
-                load.start(
-                    'ブックマーク削除再開(' + cnt + '/' + ids.length + ')'
-                );
             }
         }
     }
@@ -192,7 +223,7 @@ const system = async () => {
         console.log(i);
         try {
             await main();
-            await sleepLoadingMain(1, loading('system待機中...').start());
+            await sleepLoadingMain(5, loading('system待機中...').start());
         } catch (e) {
             console.error(e);
             process.exit(0);
@@ -267,3 +298,42 @@ const sleepLoadingMain = async (minutes, load) => {
     }
     return;
 };
+```
+
+```config.json
+{
+    "api_key": "",
+    "api_key_secret": "",
+    "bearer_token": "",
+    "access_token": "",
+    "access_token_secret": "",
+    "client_id": "",
+    "client_secret": "",
+}
+```
+
+```config2.json
+{
+    "access_token": "bearer_token",
+    "refresh_token": "refresh_token"
+}
+```
+
+ゴミクソコードですが、一応動きます。
+
+system()は、削除しながら、ブックマークを取得し続ける関数です。
+取得できるブックマークが 0 になるまで動きます。
+
+config,config2 と分かれている理由としては、処理中のトークンを config2 に保存し、API クライアント、アプリとしての設定は config に保存すると言ったように住み分けるためです。完全に自分の趣味ですので自由に変えても処理は変わりません。
+
+## 注意
+
+-   このコードは、TwitterAPI のレート制限に引っ掛かったら、15 分待機するようになっています。
+
+-   取得できるブックマークが 0 になっても、アプリで見ると残っていることがあります。これは API 側の問題なので、手動でブックマークし直して API に認識させる必要があります。
+
+-   ベアラートークンの更新を行う関数に関しては、ベアラートークン取得時のスコープに offline_access を含む必要があります。
+
+## 終わり
+
+暇人なので質問等ありましたら、コメントか Twitter に DM ください。
