@@ -8,6 +8,7 @@ const OutBookmarksDB2 = Datastore.create('db/OutBookmarks2.db');
 OutBookmarksDB2.load();
 const OutBookmarksDB = Datastore.create('db/OutBookmarks.db');
 OutBookmarksDB.load();
+const FinalBookmarksDB = Datastore.create('db/FinalBookmarks.db');
 const formattedDB = Datastore.create('db/formatted.db');
 const formattedDB2 = Datastore.create('db/formatted2.db');
 const { setTimeout } = require('timers/promises');
@@ -45,14 +46,12 @@ const insertWithoutDeplicate = async (from, to) => {
     );
 };
 
-insertWithoutDeplicate(OutBookmarksDB2, formattedDB2);
+//insertWithoutDeplicate(OutBookmarksDB2, formattedDB2);
 
-const test = () => {
-    let dup = 0,
-        nodup = 0;
-    dup++;
-    console.log(dup);
-    console.log(nodup);
+const intercept = async (from, to) => {
+    const result = await from.find({});
+    for (const item of result) {
+        const { _id, ...rest } = item;
+        await to.insert(rest);
+    }
 };
-
-//test();
