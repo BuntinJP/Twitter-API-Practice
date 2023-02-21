@@ -1,52 +1,38 @@
 const fs = require('fs');
+const _ = require('lodash');
 const Datastore = require('nedb-promises');
-const userDB = Datastore.create('db/users.db');
-userDB.load();
-const mediaDB = Datastore.create('db/media.db');
-mediaDB.load();
-const OutBookmarksDB2 = Datastore.create('db/OutBookmarks2.db');
-OutBookmarksDB2.load();
-const OutBookmarksDB = Datastore.create('db/OutBookmarks.db');
-OutBookmarksDB.load();
-const FinalBookmarksDB = Datastore.create('db/FinalBookmarks.db');
-const formattedDB = Datastore.create('db/formatted.db');
-const formattedDB2 = Datastore.create('db/formatted2.db');
+const userDB = Datastore.create('db/users.db'); //unique
+const mediaDB = Datastore.create('db/media.db'); //unique
+const OutBookmarksDB = Datastore.create('db/OutBookmarks.db'); //not unique
+const FinalBookmarksDB = Datastore.create('db/FinalBookmarks.db'); //unique
+const likes1 = Datastore.create('db/like.db'); //unique
+const likes2 = Datastore.create('db/larchel_liz_likes.db'); //unique
 const { setTimeout } = require('timers/promises');
 const loading = require('loading-cli');
+const dataStores = [
+    userDB,
+    mediaDB,
+    OutBookmarksDB,
+    formattedDB,
+    FinalBookmarksDB,
+];
 
-const insertWithoutDeplicate = async (from, to) => {
-    let dup = 0,
-        noDup = 0;
-    let load = loading('重複無くデータを挿入します...').start();
-    const result = await from.find({});
-    load.text = 'データ長: ' + result.length;
-    let count = 1;
-    for (const item of result) {
-        const now = '挿入中...(' + count + '/' + result.length + ')';
-        load.text = now;
-        const { _id, ...rest } = item;
-        const deplicated = await to.find({ id: rest.id });
-        if (deplicated.length === 0) {
-            await to.insert(rest);
-            noDup++;
-        } else {
-            dup++;
-            //load = load.warn('重複データ : text = ' + deplicated[0].text).start();
-        }
-        count++;
-    }
-    load.succeed(
-        '挿入完了(重複: ' +
-            dup +
-            ', 重複無し: ' +
-            noDup +
-            '/' +
-            result.length +
-            ')'
-    );
+const tweetSample = {
+    author_id: '1231279027458961410',
+    id: '1372168843691401220',
+    edit_history_tweet_ids: ['1372168843691401220'],
+    attachments: {
+        media_keys: [
+            '3_1372168820702343172',
+            '3_1372168820614254595',
+            '3_1372168820744355840',
+            '3_1372168820551348225',
+        ],
+    },
+    created_at: '2021-03-17T12:52:00.000Z',
+    text: 'ぶらぶらする親友コンビ https://t.co/JnegLS9OQy',
+    _id: 'knV1CbKNjCE66RYw',
 };
-
-//insertWithoutDeplicate(OutBookmarksDB2, formattedDB2);
 
 const intercept = async (from, to) => {
     const result = await from.find({});
@@ -55,3 +41,12 @@ const intercept = async (from, to) => {
         await to.insert(rest);
     }
 };
+const dataLoading = async (array) => {
+    for (const item of array) {
+        await item.load();
+    }
+};
+dataLoading(dataStores);
+
+//------------main
+insertWithoutDeplicate(OutBookmarksDB, formattedDB);

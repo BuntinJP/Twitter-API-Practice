@@ -1,18 +1,12 @@
 //-----------------EXP-----------------
 const fs = require('fs');
 const Datastore = require('nedb-promises');
-const userDB = Datastore.create('db/users.db');
-userDB.load();
-const mediaDB = Datastore.create('db/media.db');
-mediaDB.load();
-const bookmarkDB2 = Datastore.create('db/bookmarks2.db');
-bookmarkDB2.load();
-const OutBookmarksDB = Datastore.create('db/OutBookmarks.db');
-OutBookmarksDB.load();
-const formattedDB = Datastore.create('db/formatted.db'); //unique
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const { setTimeout } = require('timers/promises');
 const loading = require('loading-cli');
+const formattedDB = Datastore.create('db/formatted.db');
+const newFormattedDB = Datastore.create('db/newFormatted.db');
+const test = Datastore.create('db/test.db');
 
 //-----------------Twitter-----------------
 const { TwitterApi } = require('twitter-api-v2');
@@ -20,69 +14,10 @@ let config2 = JSON.parse(fs.readFileSync('./config2.json', 'utf8'));
 let bearerToken = config2.access_token;
 let refreshToken = config2.refresh_token;
 let client = new TwitterApi(bearerToken);
-/* const client = new TwitterApi({
-    clientId: config.client_id,
-}); */
 
-//-----------------Functions-----------------
-
-const lookupBookmarks2 = async () => {
-    let idarray = [];
-    const load = loading('1: ブックマーク取得開始').start();
-    try {
-        const options = {
-            expansions: [
-                'referenced_tweets.id',
-                'author_id',
-                'attachments.media_keys',
-            ],
-            'media.fields': [
-                'media_key',
-                'preview_image_url',
-                'type',
-                'url',
-                'public_metrics',
-                'non_public_metrics',
-                'organic_metrics',
-                'promoted_metrics',
-                'alt_text',
-                'variants',
-            ],
-            max_results: 100,
-        };
-        let bookmarks = await client.v2.bookmarks(options);
-        const { meta } = bookmarks._realData;
-        if (meta.result_count === 0) {
-            load.fail('1: ブックマーク取得失敗(result_count=0)');
-            process.exit(1);
-        }
-        let state = 1;
-        do {
-            const { users, media } = bookmarks._realData.includes;
-            if (users) await userDB.insert(users);
-            if (media) await mediaDB.insert(media);
-            load.text = 'ブックマーク取得(bookmarks.db)';
-            let datas = bookmarks._realData.data;
-            datas.forEach((data) => {
-                idarray.push(data.id);
-            });
-            if (!bookmarks.done) {
-                await bookmarks.fetchNext();
-            } else {
-                state = 0;
-            }
-        } while (state);
-    } catch (e) {
-        load.fail('1: ブックマーク取得失敗');
-        console.error(e);
-    }
-    load.succeed('1: ブックマーク取得完了' + idarray.length + '件');
-    return idarray;
-};
-
-const updateBookmarks = async (ids) => {
+const updateBookmarks = async (ids, db) => {
     const load = loading('取得中...').start();
-    await getTweetsWithTimeBounce(ids, 0, bookmarkDB2, load);
+    await getTweetsWithTimeBounce(ids, 0, db, load);
     return;
 };
 
@@ -177,33 +112,15 @@ const refreshBearerToken = async () => {
         'utf8'
     );
 };
-const main = async () => {
+/* const main = async () => {
     const result = await lookupBookmarks2();
     await updateBookmarks(result);
     await detaSave(bookmarkDB2, OutBookmarksDB);
     await unBookmark2(bookmarkDB2);
-    await insertWithoutDeplicate(OutBookmarksDB, formattedDB);
-    await OutBookmarksDB.removeMany({});
     return;
-};
-
-const system = async () => {
-    let i = 1;
-    while (i < 100) {
-        console.log(i);
-        try {
-            await main();
-            await sleepLoadingMain(1, loading('system待機中...').start());
-        } catch (e) {
-            console.error(e);
-            process.exit(0);
-        }
-        i++;
-    }
-};
+}; */
 
 //-----------------Main-------------------
-//system();
 
 //-----------------CommonLevelFunctions-----------------
 const getTweets = async (ids) => {
@@ -213,7 +130,7 @@ const getTweets = async (ids) => {
     const rt = await client.v2.tweets(ids, {
         'tweet.fields': ['created_at', 'attachments', 'author_id'],
     });
-    return rt;
+    return rt.data;
 };
 
 const getTweetsWithTimeBounce = async (ids, start, db, load = null) => {
@@ -242,10 +159,11 @@ const getTweetsWithTimeBounce = async (ids, start, db, load = null) => {
             tweets = await getTweets(ids.slice(start, end));
         }
     }
+
     load = load
-        .succeed('取得完了 (' + tweets.data.length + '件)')
+        .succeed('取得完了 (' + tweets.length + '件)')
         .start('データ挿入開始');
-    await bookmarkDB2.insert(tweets.data);
+    await db.insert(tweets);
     if (end < ids.length) {
         load = load.succeed('取得中...' + end + '/' + ids.length);
         await getTweetsWithTimeBounce(ids, end, db, load);
@@ -270,76 +188,26 @@ const sleepLoadingMain = async (minutes, load) => {
     return;
 };
 
-const insertWithoutDeplicate = async (from, to) => {
-    let dup = 0,
-        noDup = 0;
-    let load = loading('重複無くデータを挿入します...').start();
-    const result = await from.find({});
-    load.text = 'データ長: ' + result.length;
-    let count = 1;
-    for (const item of result) {
-        const now = '挿入中...(' + count + '/' + result.length + ')';
-        load.text = now;
-        const { _id, ...rest } = item;
-        const deplicated = await to.find({ id: rest.id });
-        if (deplicated.length === 0) {
-            await to.insert(rest);
-            noDup++;
-        } else {
-            dup++;
-            //load = load.warn('重複データ : text = ' + deplicated[0].text).start();
-        }
-        count++;
-    }
-    load.succeed(
-        '挿入完了(重複: ' +
-            dup +
-            ', 重複無し: ' +
-            noDup +
-            '/' +
-            result.length +
-            ')'
+const saveAsJson = (data, filename) => {
+    fs.writeFileSync(
+        `./JSON/${filename}.json`,
+        JSON.stringify(data, null, 4),
+        'utf8'
     );
 };
-const removeDeplicate = async (from) => {
-    let load = loading('重複を削除します...').start();
-    const result = (await from.find({})).map((item) => {
-        const { _id, ...rest } = item;
-        return rest;
-    });
-    load.text = 'データベースロード完了';
-    from.remove({}, { multi: true });
-    let count = 1;
-    let length = result.length;
-    let dup = 0,
-        noDup = 0;
-    for (const item of result) {
-        load.text = '重複削除中...(' + count + '/' + length + ')';
-        const db = (await from.find({})).map((item) => {
-            const { _id, ...rest } = item;
-            return rest;
-        });
-        let isDup = false;
-        for (const item2 of db) {
-            if (_.isEqual(item, item2)) {
-                isDup = true;
-                break;
-            } else {
-            }
-        }
-        if (!isDup) {
-            await from.insert(item);
-            noDup++;
-        } else {
-            dup++;
-        }
-        count++;
-    }
-    load.succeed('重複削除完了: 重複: ' + dup + ', 重複無し: ' + noDup);
-};
-const t = async () => {
-    await insertWithoutDeplicate(OutBookmarksDB, formattedDB);
-    await OutBookmarksDB.removeMany({});
-};
 
-t();
+(async () => {
+    const result = await formattedDB.find({});
+    const ids = result.map((doc) => doc.id);
+    const ids2 = await (await newFormattedDB.find({})).map((doc) => doc.id);
+    for (id of ids) {
+        if (ids2.includes(id)) {
+            //
+        } else {
+            console.log(id);
+            console.log(
+                JSON.stringify((await formattedDB.find({ id: id }))[0], null, 4)
+            );
+        }
+    }
+})();
