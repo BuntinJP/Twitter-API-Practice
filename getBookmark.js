@@ -193,7 +193,7 @@ const system = async () => {
         console.log(i);
         try {
             await main();
-            await sleepLoadingMain(1, loading('system待機中...').start());
+            await sleepLoadingMain(10, loading('system待機中...').start());
         } catch (e) {
             console.error(e);
             process.exit(0);
@@ -203,7 +203,7 @@ const system = async () => {
 };
 
 //-----------------Main-------------------
-//system();
+system();
 
 //-----------------CommonLevelFunctions-----------------
 const getTweets = async (ids) => {
@@ -337,9 +337,4 @@ const removeDeplicate = async (from) => {
     }
     load.succeed('重複削除完了: 重複: ' + dup + ', 重複無し: ' + noDup);
 };
-const t = async () => {
-    await insertWithoutDeplicate(OutBookmarksDB, formattedDB);
-    await OutBookmarksDB.removeMany({});
-};
 
-t();

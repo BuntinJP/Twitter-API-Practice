@@ -80,20 +80,30 @@ class tweet {
 
     async fetchMedia() {
         let result = {
+            id: this.id,
             status: 'true',
             message: 'media fetched',
             fetchedKeys: [],
-            failedKeys: [],
+            failedKeysResults: [],
+            noNeedtoFetchKeys: [],
         };
         for (const key in this.media) {
             const mediaObj = this.media[key];
             const fetchResult = await mediaObj.fetch();
-            if (fetchResult.status !== 3) {
-                result.status = 'warn';
-                result.message = 'media fetch failed';
-                result.failedKeys.push(key);
-            } else {
-                result.fetchedKeys.push(key);
+            switch (fetchResult.status) {
+                case 1:
+                    result.noNeedtoFetchKeys.push(key);
+                    break;
+                case 2:
+                    result.status = 'warn';
+                    result.message = 'media fetch failed';
+                    result.failedKeysResults.push(fetchResult);
+                    break;
+                case 3:
+                    result.fetchedKeys.push(key);
+                    break;
+                default:
+                    break;
             }
         }
         return result;
@@ -115,20 +125,53 @@ class media {
         this._id = _id;
         this.filename = url ? url.split('/').pop() : '';
         this.filepath = url ? this.pathSolver() : '';
+        if(this.type !== 'photo') {
+            this.preview_image_filename = preview_image_url ? preview_image_url.split('/').pop() : '';
+            this.preview_image_filepath = preview_image_url ? this.pathSolver(true) : '';
+        }
     }
 
     async fetch() {
         if (this.inLocal) {
             return { status: 1, message: 'already in local' };
+        }
+        if (this.type === 'video' || this.type === 'animated_gif') { 
+            if(fs.existsSync(this.preview_image_filepath)) {
+                return { status: 1, message: 'already in local' };
+            }
+            //preview image fetch
+            try {
+                fs.writeFileSync(
+                    this.preview_image_filepath,
+                    new Buffer.from(
+                        (
+                            await axios.get(this.preview_image_url, {
+                                responseType: 'arraybuffer',
+                            })
+                        ).data
+                    ),
+                    'binary'
+                );
+                return { status: 3, message: 'preview image fetched' };
+            } catch (error) {
+                return { status: 2, message: 'preview image fetch failed', error: error,key: this.media_key };
+            }
         } else {
-            const res = await axios.get(this.url, {
-                responseType: 'arraybuffer',
-            });
-            fs.writeFileSync(
-                this.filepath,
-                new Buffer.from(res.data),
-                'binary'
-            );
+            try {
+                fs.writeFileSync(
+                    this.filepath,
+                    new Buffer.from(
+                        (
+                            await axios.get(this.url, {
+                                responseType: 'arraybuffer',
+                            })
+                        ).data
+                    ),
+                    'binary'
+                );
+            } catch (error) {
+                return { status: 2, message: 'fetch failed' };
+            }
         }
         return { status: 3, message: 'fetched' };
     }
@@ -141,21 +184,26 @@ class media {
     get fullDataString() {
         return JSON.stringify(this, null, 4);
     }
-    pathSolver() {
+    pathSolver(ifPreview = false) {
         let path = 'media/';
-        switch (this.type) {
-            case 'photo':
-                path += 'img/';
-                break;
-            case 'video':
-                path += 'video/';
-                break;
-            case 'animated_gif':
-                path += 'gif/';
-                break;
-            default:
-                path += 'unknown/';
-                break;
+        if(!ifPreview) {
+            switch (this.type) {
+                case 'photo':
+                    path += 'img/';
+                    break;
+                case 'video':
+                    path += 'video/';
+                    break;
+                case 'animated_gif':
+                    path += 'gif/';
+                    break;
+                default:
+                    path += 'unknown/';
+                    break;
+            }
+        } else {
+            path += 'preview/';
+            return path + this.preview_image_filename;
         }
         return path + this.filename;
     }
@@ -193,12 +241,20 @@ class user {
     const tweets = await formattedDB.find({});
     let tweetArray = [];
     for (const item of tweets) {
-        const tweetObj = new tweet(item);
-        tweetArray.push(tweetObj);
+        tweetArray.push(new tweet(item));
     }
     const solveResult = await tweetMediaSolver(tweetArray);
     const fetchResult = await fetchAllMedia(tweetArray);
+    const faileResults = [];
+    for (const item of fetchResult) {
+        if (item.status === 'warn') {
+            faileResults.push(item);
+        }
+    }
+    saveAsJson(solveResult, 'solveResult');
     saveAsJson(fetchResult, 'fetchResult');
+    saveAsJson(tweetArray, 'tweetArray');
+    saveAsJson(faileResults, 'faileResults');
 })();
 //================================================================================================
 const fetchAllMedia = async (tweetArray) => {
@@ -208,26 +264,14 @@ const fetchAllMedia = async (tweetArray) => {
     ).start();
     let data = [];
     for (const tweet of tweetArray) {
-        while (true) {
-            try {
-                const result = await tweet.fetchMedia();
-                data.push(result);
-                load.text =
-                    'メディアデータを取得中...(' +
-                    (tweetArray.indexOf(tweet) + 1) +
-                    '/' +
-                    tweetArray.length +
-                    ')';
-                break;
-            } catch (error) {
-                if (error.code === 429) {
-                    load.text = 'メディアデータを取得中...(API制限中)';
-                    await sleep(1000 * 60 * 15);
-                    continue;
-                }
-                console.erroe(error);
-            }
-        }
+        const result = await tweet.fetchMedia();
+        data.push(result);
+        load.text =
+            'メディアデータを取得中...(' +
+            (tweetArray.indexOf(tweet) + 1) +
+            '/' +
+            tweetArray.length +
+            ')';
     }
     load.succeed('メディアデータ取得完了');
     return data;
@@ -260,7 +304,7 @@ const tweetMediaSolver = async (tweetArray) => {
             '/' +
             tweetArray.length +
             ')';
-        await setTimeout(5);
+        await setTimeout(1);
     }
     load.succeed('メディアデータ解決完了');
     return data;

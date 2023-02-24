@@ -5,3 +5,4 @@ bookmarks.json
 *.db
 JSON/
 .DS_Store
+media/
