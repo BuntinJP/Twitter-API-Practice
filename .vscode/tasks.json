@@ -1,0 +1,23 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "typescript",
+            "tsconfig": "tsconfig.json",
+            "option": "watch",
+            "problemMatcher": ["$tsc-watch"],
+            "group": "build",
+            "label": "tsc: ウォッチ - tsconfig.json"
+        },
+        {
+            "label": "ts-node",
+            "type": "shell",
+            "command": "ts-node ${relativeFile}"
+        },
+        {
+            "label": "mocha",
+            "type": "shell",
+            "command": "npm-run mocha -r espower-typescript/guess ${relativeFile}"
+        }
+    ]
+}

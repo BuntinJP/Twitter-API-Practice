@@ -4,7 +4,7 @@ const axios = require('axios');
 const _ = require('lodash');
 const Datastore = require('nedb-promises');
 const mediaDB = Datastore.create('db/media.db'); //unique
-const formattedDB = Datastore.create('db/formatted.db'); //unique
+const db = Datastore.create('db/bookmarks.db'); //unique
 const { setTimeout } = require('timers/promises');
 const loading = require('loading-cli');
 import fetch from './fetch';
@@ -350,7 +350,7 @@ const getDate = () => {
 };
 
 (async () => {
-    const tweets = await formattedDB.find({});
+    const tweets = await db.find({});
     let tweetArray: tweet[] = [];
     for (const item of tweets) {
         tweetArray.push(new tweet(item));
