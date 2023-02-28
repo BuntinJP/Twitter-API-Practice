@@ -12,15 +12,55 @@ interface media {
     media_key: string;
     url: string;
     type: string;
-    preview_image_url: string;
     _id: string;
-    filename: string;
-    filepath: string;
-    preview_image_filename: string;
-    preview_image_filepath: string;
 }
+interface tweet {
+    id: string;
+    text: string;
+    attachments: { media_keys: string[] } | undefined;
+    created_at: string;
+    author_id: string;
+    edit_history_tweet_ids: string[];
+    _id: string;
+}
+interface user {
+    id: string;
+    name: string;
+    username: string;
+    _id: string;
+}
+interface fetchResultletOnMedia {
+    status: number;
+    message: string;
+    key?: string;
+    error?: any;
+}
+interface fetchResultletOnTweet {
+    id: string;
+    status: string;
+    message: string;
+    fetchedKeys: string[];
+    failedKeysResults: fetchResultletOnMedia[];
+    noNeedtoFetchKeys: string[];
+}
+interface solveResultletOnTweet {
+    status: string;
+    message: string;
+    keys?: string[];
+}
+type fetchMedia = () => Promise<fetchResultletOnMedia>;
+
 class tweet {
-    constructor(tweetObj) {
+    id: string;
+    text: string;
+    author_id: string;
+    created_at: string;
+    attachments: { media_keys: string[] } | undefined;
+    edit_history_tweet_ids: string[];
+    _id: string;
+    type: string;
+    media: { [key: string]: media };
+    constructor(tweetObj: tweet) {
         this.id = tweetObj.id;
         this.text = tweetObj.text;
         this.author_id = tweetObj.author_id;
@@ -43,55 +83,39 @@ class tweet {
     solveUser() {
         //
     }
-    async solveMedia() {
+    async solveMedia(): Promise<solveResultletOnTweet> {
         if (typeof this.attachments === 'undefined') {
-            let data = readJson();
-            data.noAttachment.push(this.id);
-            writeJson(data);
             return { status: 'false', message: 'no attachment' };
         } else if (
             typeof this.attachments.media_keys === 'undefined' ||
             this.attachments.media_keys.length === 0
         ) {
-            let data = readJson();
-            data.noMedia.push(this.id);
-            writeJson(data);
             return { status: 'false', message: 'no media keys' };
         }
-        const mediaKeys = this.attachments.media_keys;
-        let result = {
+        const mediaKeys: string[] = this.attachments.media_keys;
+        let result: solveResultletOnTweet = {
             status: 'true',
             message: 'media keys solved',
             keys: [],
         };
         for (const key of mediaKeys) {
             //mediaDBからkeyを検索
-            const mediaObj = await mediaDB.find({ media_key: key });
+            const mediaObj: media[] = await mediaDB.find({ media_key: key });
             if (mediaObj.length === 0) {
                 result.status = 'warn';
                 result.message = 'media not found';
-                result.keys.push(key);
+                result.keys && result.keys.push(key);
             } else {
                 //mediaクラスを作成
                 const mediaObject = new media(mediaObj[0]);
                 this.media[key] = mediaObject;
             }
         }
-        if (result.status === 'warn') {
-            let data = readJson();
-            for (const key of result.keys) {
-                data.notExistMedia.push(key);
-            }
-            writeJson(data);
-            return result;
-        } else {
-            //
-        }
         return result;
     }
 
     async fetchMedia() {
-        let result = {
+        let result: fetchResultletOnTweet = {
             id: this.id,
             status: 'true',
             message: 'media fetched',
@@ -120,24 +144,24 @@ class tweet {
         }
         return result;
     }
-    get fullData() {
+    get fullData(): tweet {
         return this;
     }
-    get fullDataString() {
+    get fullDataString(): string {
         return JSON.stringify(this, null, 4);
     }
 }
 class media {
-    media_key:string;
-    url:string;
-    type:string;
-    preview_image_url:string;
-    _id:string;
-    filename:string;
-    filepath:string;
-    preview_image_filename:string;
-    preview_image_filepath:string;
-    constructor(mediaObj) {
+    media_key: string;
+    url: string;
+    type: string;
+    preview_image_url: string;
+    _id: string;
+    filename: string | undefined;
+    filepath: string;
+    preview_image_filename: string | undefined;
+    preview_image_filepath: string;
+    constructor(mediaObj: media) {
         const { media_key, url, type, _id, preview_image_url } = mediaObj;
         this.media_key = media_key;
         this.url = url;
@@ -156,7 +180,14 @@ class media {
         }
     }
 
-    async fetch() {
+    static dataSample = {
+        media_key: '3_1384153802148782092',
+        url: 'https://pbs.twimg.com/media/EzWAjKuVoAwiGsE.jpg',
+        type: 'photo',
+        _id: '00QL3fyWhff8tBvM',
+    };
+
+    async fetch(): Promise<fetchResultletOnMedia> {
         if (this.inLocal) {
             return { status: 1, message: 'already in local' };
         }
@@ -166,7 +197,10 @@ class media {
             }
             //preview image fetch
             try {
-                await fetch(this.preview_image_filepath, this.preview_image_url);
+                await fetch(
+                    this.preview_image_filepath,
+                    this.preview_image_url
+                );
                 return { status: 3, message: 'preview image fetched' };
             } catch (error) {
                 return {
@@ -178,20 +212,20 @@ class media {
             }
         } else {
             try {
-                await fetch(this.filepath,this.url);
+                await fetch(this.filepath, this.url);
             } catch (error) {
                 return { status: 2, message: 'fetch failed' };
             }
         }
         return { status: 3, message: 'fetched' };
     }
-    get fullData() {
+    get fullData(): media {
         return this;
     }
-    get inLocal() {
+    get inLocal(): boolean {
         return fs.existsSync(this.filepath);
     }
-    get fullDataString() {
+    get fullDataString(): string {
         return JSON.stringify(this, null, 4);
     }
     pathSolver(ifPreview = false) {
@@ -232,13 +266,8 @@ class user {
         this._id = userObj._id;
     }
 
-    get fullData() {
-        return {
-            id: this.id,
-            name: this.name,
-            username: this.username,
-            _id: this._id,
-        };
+    get fullData(): user {
+        return this;
     }
 
     solve() {
@@ -247,32 +276,13 @@ class user {
     }
 }
 
-(async () => {
-    const tweets = await formattedDB.find({});
-    let tweetArray = [];
-    for (const item of tweets) {
-        tweetArray.push(new tweet(item));
-    }
-    const solveResult = await tweetMediaSolver(tweetArray);
-    const fetchResult = await fetchAllMedia(tweetArray);
-    const faileResults = [];
-    for (const item of fetchResult) {
-        if (item.status === 'warn') {
-            faileResults.push(item);
-        }
-    }
-    saveAsJson(solveResult, 'solveResult');
-    saveAsJson(fetchResult, 'fetchResult');
-    saveAsJson(tweetArray, 'tweetArray');
-    saveAsJson(faileResults, 'faileResults');
-})();
 //================================================================================================
-const fetchAllMedia = async (tweetArray) => {
+const fetchAllMedia = async (tweetArray: tweet[]) => {
     //tweetArray = tweet型の配列
     let load = loading(
         'メディアデータを取得中...(1/' + tweetArray.length + ')'
     ).start();
-    let data = [];
+    let data: fetchResultletOnTweet[] = [];
     for (const tweet of tweetArray) {
         const result = await tweet.fetchMedia();
         data.push(result);
@@ -286,25 +296,12 @@ const fetchAllMedia = async (tweetArray) => {
     load.succeed('メディアデータ取得完了');
     return data;
 };
-const test = async () => {
-    let load = loading('メインプロセス実行中...');
-    const photos = await mediaDB.find({ type: 'photo' });
-    const mediaArray = [];
-    load.text = 'メディアデータを整形中...(1/' + photos.length + ')';
-    for (const item of photos) {
-        const mediaObj = new media(item);
-        mediaArray.push(mediaObj);
-    }
-    console.log(mediaArray[mediaArray.length - 1].fullDataString);
-    await mediaArray[mediaArray.length - 1].solve();
-    load.succeed('メインプロセス完了');
-};
 
-const tweetMediaSolver = async (tweetArray) => {
+const tweetMediaSolver = async (tweetArray: tweet[]) => {
     let load = loading(
         'メディアデータを解決中...(1/' + tweetArray.length + ')'
     ).start();
-    let data = [];
+    let data: solveResultletOnTweet[] = [];
     for (const tweet of tweetArray) {
         const result = await tweet.solveMedia();
         data.push(result);
@@ -348,3 +345,23 @@ const getDate = () => {
         ('00' + dt.getSeconds()).slice(-2); //秒の取得
     return text;
 };
+
+(async () => {
+    const tweets = await formattedDB.find({});
+    let tweetArray: tweet[] = [];
+    for (const item of tweets) {
+        tweetArray.push(new tweet(item));
+    }
+    const solveResult = await tweetMediaSolver(tweetArray);
+    const fetchResult = await fetchAllMedia(tweetArray);
+    const faileResults: fetchResultletOnTweet[] = [];
+    for (const item of fetchResult) {
+        if (item.status === 'warn') {
+            faileResults.push(item);
+        }
+    }
+    saveAsJson(solveResult, 'solveResult');
+    saveAsJson(fetchResult, 'fetchResult');
+    saveAsJson(tweetArray, 'tweetArray');
+    saveAsJson(faileResults, 'faileResults');
+})();
