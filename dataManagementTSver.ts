@@ -177,6 +177,9 @@ class media {
             this.preview_image_filepath = preview_image_url
                 ? this.pathSolver(true)
                 : '';
+        } else {
+            this.preview_image_filename = '';
+            this.preview_image_filepath = '';
         }
     }
 
@@ -259,7 +262,7 @@ class user {
         username: 'History_JP_5963',
         _id: 'whkvmvKcVCgPmFLy',
     };
-    constructor(userObj) {
+    constructor(userObj: user) {
         this.id = userObj.id;
         this.name = userObj.name;
         this.username = userObj.username;
@@ -322,11 +325,11 @@ const readJson = () => {
     return JSON.parse(data);
 };
 
-const writeJson = (data) => {
+const writeJson = (data: object) => {
     fs.writeFileSync('JSON/dataManagement.json', JSON.stringify(data, null, 4));
 };
 
-const saveAsJson = (data, filename) => {
+const saveAsJson = (data: object, filename: string) => {
     fs.writeFileSync(
         `./JSON/${filename}.json`,
         JSON.stringify(data, null, 4),

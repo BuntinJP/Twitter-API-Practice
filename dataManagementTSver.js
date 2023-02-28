@@ -205,6 +205,10 @@ var media = /** @class */ (function () {
                 ? this.pathSolver(true)
                 : '';
         }
+        else {
+            this.preview_image_filename = '';
+            this.preview_image_filepath = '';
+        }
     }
     media.prototype.fetch = function () {
         return __awaiter(this, void 0, void 0, function () {
