@@ -87,6 +87,7 @@ const lookupBookmarks: lookupFunc = async () => {
     let idarray: string[] = [];
     const load = loading('1: ブックマーク取得開始').start();
     try {
+        //
         const options: Partial<TweetV2PaginableTimelineParams> = {
             expansions: [
                 'referenced_tweets.id',
@@ -202,8 +203,7 @@ const insertWithoutDep: ins = async (
         nodup = 0;
     const load = loading('3: ツイート挿入開始').start();
     for (const tweet of tweets) {
-        const now = '挿入中...(' + count + '/' + tweets.length + ')';
-        load.text = now;
+        load.text = '挿入中...(' + count + '/' + tweets.length + ')';
         const dep = await db.find({ id: tweet.id });
         if (dep.length === 0) {
             await db.insert(tweet);
@@ -239,7 +239,9 @@ const unBookmark = async (ids: string[]) => {
             try {
                 let result = await client.v2.deleteBookmark(id);
                 if (result.data.bookmarked) {
-                    load = loading('削除失敗(' + id + ')').warn();
+                    load = loading('削除失敗(' + id + ')')
+                        .warn()
+                        .start();
                 }
                 cnt++;
                 count++;
