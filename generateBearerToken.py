@@ -3,7 +3,7 @@ import json
 
 config = json.load(open('config.json', 'r'))
 scopes = ['tweet.read', 'users.read', 'bookmark.read', 'bookmark.write', 'like.read', 'offline.access']
-oauth2_user_handler = tweepy.OAuth2UserHandler(client_id=config['client_id'], redirect_uri='https://api.buntin.tech/twitter', scope=scopes, client_secret=config['client_secret'])
+oauth2_user_handler = tweepy.OAuth2UserHandler(client_id=config['client_id'], redirect_uri='https://api.buntin.xyz/twitter', scope=scopes, client_secret=config['client_secret'])
 
 # まず認証画面の URL を生成する
 auth_url = oauth2_user_handler.get_authorization_url()
